@@ -39,6 +39,10 @@ variable "PublicSubnetIDs" {
   default = ["subnet-00b555b304d0a23ce", "subnet-01361c439ca4a48dd"]
 }
 
+variable "autoscaling_notification_arn" {
+  default = "arn:aws:sns:us-east-1:499000881936:AutoScaling-Activity-Dashboard"
+}
+
 ////////// End of Variables
 
 
@@ -123,6 +127,7 @@ resource "aws_launch_configuration" "App_LC--TF" {
 
 }
 
+// Create the autoscaling group
 resource "aws_autoscaling_group" "QA-Prod-autoscale-grp" {
   availability_zones = ["us-east-1a", "us-east-1b"]
   name                      = "QA-Prod-autoscale-grp--TF"
@@ -135,7 +140,6 @@ resource "aws_autoscaling_group" "QA-Prod-autoscale-grp" {
   target_group_arns         = ["${aws_lb_target_group.APP-TargGrp--TF.arn}"]
   termination_policies      = ["OldestInstance"]
   vpc_zone_identifier       = "${var.PublicSubnetIDs}"
-
   tag {
     key                 = "Environment"
     value               = "Production"
@@ -146,5 +150,19 @@ resource "aws_autoscaling_group" "QA-Prod-autoscale-grp" {
     value = "QA_ASG--TF"
       propagate_at_launch = true
   }
+}
 
+resource "aws_autoscaling_notification" "asg_activity_notification" {
+  group_names = [
+    "${aws_autoscaling_group.QA-Prod-autoscale-grp.name}"
+  ]
+
+  notifications = [
+    "autoscaling:EC2_INSTANCE_LAUNCH",
+    "autoscaling:EC2_INSTANCE_TERMINATE",
+    "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+    "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+  ]
+
+  topic_arn = "${var.autoscaling_notification_arn}"
 }
