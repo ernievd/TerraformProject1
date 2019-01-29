@@ -4,7 +4,7 @@ provider "aws" {
   profile = "terraform-user"
 }
 
-// Assign all the variables
+/////////// Assign all the variables
 variable "ExternalElbSGId" {
   default = "sg-0b834fef36203ccc9"
 }
@@ -30,6 +30,16 @@ variable "MyBucket" {
 variable "VPCID" {
   default = "vpc-08e37afc3b2d79e41"
 }
+
+variable "AsgAZs" {
+  default = ["us-east-1a", "us-east-1b"]
+}
+
+variable "PublicSubnetIDs" {
+  default = ["subnet-00b555b304d0a23ce", "subnet-01361c439ca4a48dd"]
+}
+
+////////// End of Variables
 
 
 data "aws_elb_service_account" "main" {}
@@ -99,7 +109,7 @@ resource "aws_lb_listener" "APP-HTTP-Listener--TF" {
 }
 
 
-// Create the launch configuration for the laod balancer
+// Create the launch configuration for the load balancer
 resource "aws_launch_configuration" "App_LC--TF" {
   name          = "QA-App_LC--TF"
   image_id      = "${var.amiId}"
@@ -110,4 +120,31 @@ resource "aws_launch_configuration" "App_LC--TF" {
   enable_monitoring = "false"
   security_groups = ["sg-0b873c7f2a3b27a69"]
   user_data = "${file("${var.userDataPath}")}"
+
+}
+
+resource "aws_autoscaling_group" "QA-Prod-autoscale-grp" {
+  availability_zones = ["us-east-1a", "us-east-1b"]
+  name                      = "QA-Prod-autoscale-grp--TF"
+  max_size                  = 4
+  min_size                  = 2
+  health_check_grace_period = 300
+  health_check_type         = "ELB"
+  desired_capacity          = 2
+  launch_configuration      = "${aws_launch_configuration.App_LC--TF.name}"
+  target_group_arns         = ["${aws_lb_target_group.APP-TargGrp--TF.arn}"]
+  termination_policies      = ["OldestInstance"]
+  vpc_zone_identifier       = "${var.PublicSubnetIDs}"
+
+  tag {
+    key                 = "Environment"
+    value               = "Production"
+    propagate_at_launch = true
+  }
+    tag {
+    key = "Name"
+    value = "QA_ASG--TF"
+      propagate_at_launch = true
+  }
+
 }
