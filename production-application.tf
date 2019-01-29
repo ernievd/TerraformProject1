@@ -152,6 +152,7 @@ resource "aws_autoscaling_group" "QA-Prod-autoscale-grp" {
   }
 }
 
+
 resource "aws_autoscaling_notification" "asg_activity_notification" {
   group_names = [
     "${aws_autoscaling_group.QA-Prod-autoscale-grp.name}"
@@ -165,4 +166,54 @@ resource "aws_autoscaling_notification" "asg_activity_notification" {
   ]
 
   topic_arn = "${var.autoscaling_notification_arn}"
+}
+
+resource "aws_cloudwatch_metric_alarm" "High_Cpu_Alarm" {
+  alarm_name = "App_High_Cpu_Alarm--TF"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods = "5"
+  metric_name = "CPUUtilization"
+  namespace = "AWS/EC2"
+  period = "60"
+  statistic = "Average"
+  threshold = "80"
+  alarm_description = "This metric monitors ec2 cpu utilization"
+  alarm_actions         = ["${aws_autoscaling_policy.app_scaleup_policy.arn}"]
+  dimensions = {
+    AutoScalingGroupName = "${aws_autoscaling_group.QA-Prod-autoscale-grp.name}"
+  }
+}
+
+//
+resource "aws_autoscaling_policy" "app_scaleup_policy" {
+  name                   = "app_scaleup_policy--TF"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = "${aws_autoscaling_group.QA-Prod-autoscale-grp.name}"
+}
+
+resource "aws_cloudwatch_metric_alarm" "Low_Cpu_Alarm" {
+  alarm_name            = "App_Low_Cpu_Alarm--TF"
+  comparison_operator   = "LessThanOrEqualToThreshold"
+  evaluation_periods    = "5"
+  metric_name           = "CPUUtilization"
+  namespace             = "AWS/EC2"
+  period                = "60"
+  statistic             = "Average"
+  threshold             = "30"
+  alarm_description     = "This metric monitors ec2 cpu utilization"
+  alarm_actions         = ["${aws_autoscaling_policy.app_scaledown_policy.arn}"]
+  dimensions            = {
+      AutoScalingGroupName = "${aws_autoscaling_group.QA-Prod-autoscale-grp.name}"
+  }
+}
+
+//
+resource "aws_autoscaling_policy" "app_scaledown_policy" {
+  name                   = "app_scaledown_policy--TF"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = "${aws_autoscaling_group.QA-Prod-autoscale-grp.name}"
 }
