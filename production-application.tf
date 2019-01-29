@@ -1,8 +1,10 @@
+// Set teh provider
 provider "aws" {
   region = "us-east-1"
   profile = "terraform-user"
 }
 
+// Assign all the variables
 variable "ExternalElbSGId" {
   default = "sg-0b834fef36203ccc9"
 }
@@ -13,6 +15,14 @@ variable "DMZSubnetIds" {
     "subnet-0e3c9ee5d0bba879b"]
 }
 
+variable "amiId" {
+  default = "ami-035be7bafff33b6b6"
+}
+
+variable "userDataPath" {
+  default = "//home//ernie//TerraformProject1//userdata.txt"
+}
+
 variable "MyBucket" {
   default = "ernie-bucket"
 }
@@ -20,6 +30,7 @@ variable "MyBucket" {
 variable "VPCID" {
   default = "vpc-08e37afc3b2d79e41"
 }
+
 
 data "aws_elb_service_account" "main" {}
 
@@ -37,6 +48,7 @@ data "aws_iam_policy_document" "s3_lb_write" {
     }
 }
 
+// Create the Application Load Balancer
 resource "aws_lb" "productionApplication-AplicationLoadBalancer" {
   name = "Production-ALB--TF"
   internal = false
@@ -44,7 +56,6 @@ resource "aws_lb" "productionApplication-AplicationLoadBalancer" {
   security_groups = [
     "${var.ExternalElbSGId}"]
   subnets = "${var.DMZSubnetIds}"
-
   enable_deletion_protection = true
 
 //  access_logs {
@@ -52,12 +63,12 @@ resource "aws_lb" "productionApplication-AplicationLoadBalancer" {
 //    prefix = "logs"
 //    enabled = true
 //  }
-
   tags = {
     Environment = "production"
   }
 }
 
+// Create the load balancer target group
 resource "aws_lb_target_group" "APP-TargGrp--TF" {
   name = "APP-TargGrp--TF"
   port = 80
@@ -75,6 +86,7 @@ resource "aws_lb_target_group" "APP-TargGrp--TF" {
   }
 }
 
+// Create the load balancer listener
 resource "aws_lb_listener" "APP-HTTP-Listener--TF" {
   load_balancer_arn = "${aws_lb.productionApplication-AplicationLoadBalancer.arn}"
   port = "80"
@@ -86,3 +98,16 @@ resource "aws_lb_listener" "APP-HTTP-Listener--TF" {
   }
 }
 
+
+// Create the launch configuration for the laod balancer
+resource "aws_launch_configuration" "App_LC--TF" {
+  name          = "QA-App_LC--TF"
+  image_id      = "${var.amiId}"
+  instance_type = "t2.micro"
+  iam_instance_profile = "QA-EC2-Role--Dashboard"
+  key_name = "udemy-ec2"
+  ebs_optimized = "false"
+  enable_monitoring = "false"
+  security_groups = ["sg-0b873c7f2a3b27a69"]
+  user_data = "${file("${var.userDataPath}")}"
+}
