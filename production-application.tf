@@ -1,10 +1,10 @@
-// Set teh provider
+// Set the provider
 provider "aws" {
   region = "us-east-1"
   profile = "terraform-user"
 }
 
-/////////// Assign all the variables
+/////////// Assign all the variables ////////////
 variable "ExternalElbSGId" {
   default = "sg-0b834fef36203ccc9"
 }
@@ -43,8 +43,7 @@ variable "autoscaling_notification_arn" {
   default = "arn:aws:sns:us-east-1:499000881936:AutoScaling-Activity-Dashboard"
 }
 
-////////// End of Variables
-
+////////// End of Variables /////////////////
 
 data "aws_elb_service_account" "main" {}
 
@@ -52,11 +51,11 @@ data "aws_iam_policy_document" "s3_lb_write" {
     policy_id = "s3_lb_write"
 
     statement = {
-        actions = ["s3:PutObject"]
-        resources = ["arn:aws:s3:::<my-bucket>/logs/*"]
+        actions             = ["s3:PutObject"]
+        resources           = ["arn:aws:s3:::<my-bucket>/logs/*"]
 
         principals = {
-            identifiers = ["${data.aws_elb_service_account.main.arn}"]
+            identifiers      = ["${data.aws_elb_service_account.main.arn}"]
             type = "AWS"
         }
     }
@@ -64,13 +63,12 @@ data "aws_iam_policy_document" "s3_lb_write" {
 
 // Create the Application Load Balancer
 resource "aws_lb" "productionApplication-AplicationLoadBalancer" {
-  name = "Production-ALB--TF"
-  internal = false
-  load_balancer_type = "application"
-  security_groups = [
-    "${var.ExternalElbSGId}"]
-  subnets = "${var.DMZSubnetIds}"
-  enable_deletion_protection = true
+  name                      = "Production-ALB--TF"
+  internal                  = false
+  load_balancer_type        = "application"
+  security_groups           = ["${var.ExternalElbSGId}"]
+  subnets                   = "${var.DMZSubnetIds}"
+  enable_deletion_protection = false
 
 //  access_logs {
 //    bucket = "${var.MyBucket}"
@@ -78,52 +76,51 @@ resource "aws_lb" "productionApplication-AplicationLoadBalancer" {
 //    enabled = true
 //  }
   tags = {
-    Environment = "production"
+    Environment             = "production"
   }
 }
 
 // Create the load balancer target group
 resource "aws_lb_target_group" "APP-TargGrp--TF" {
-  name = "APP-TargGrp--TF"
-  port = 80
-  protocol = "HTTP"
-  vpc_id = "${var.VPCID}"
+  name                      = "APP-TargGrp--TF"
+  port                      = 80
+  protocol                  = "HTTP"
+  vpc_id                    = "${var.VPCID}"
 
   health_check {
-    interval = "30"
-    path = "/"
-    protocol = "HTTP"
-    healthy_threshold = "2"
-    unhealthy_threshold = "5"
-    timeout = "28"
-    matcher = "200"
+    interval                = "30"
+    path                    = "/"
+    protocol                = "HTTP"
+    healthy_threshold       = "2"
+    unhealthy_threshold     = "5"
+    timeout                 = "28"
+    matcher                 = "200"
   }
 }
 
 // Create the load balancer listener
 resource "aws_lb_listener" "APP-HTTP-Listener--TF" {
-  load_balancer_arn = "${aws_lb.productionApplication-AplicationLoadBalancer.arn}"
-  port = "80"
-  protocol = "HTTP"
+  load_balancer_arn         = "${aws_lb.productionApplication-AplicationLoadBalancer.arn}"
+  port                      = "80"
+  protocol                  = "HTTP"
 
   default_action {
-    type = "forward"
-    target_group_arn = "${aws_lb_target_group.APP-TargGrp--TF.arn}"
+    type                    = "forward"
+    target_group_arn        = "${aws_lb_target_group.APP-TargGrp--TF.arn}"
   }
 }
 
-
 // Create the launch configuration for the load balancer
 resource "aws_launch_configuration" "App_LC--TF" {
-  name          = "QA-App_LC--TF"
-  image_id      = "${var.amiId}"
-  instance_type = "t2.micro"
-  iam_instance_profile = "QA-EC2-Role--Dashboard"
-  key_name = "udemy-ec2"
-  ebs_optimized = "false"
-  enable_monitoring = "false"
-  security_groups = ["sg-0b873c7f2a3b27a69"]
-  user_data = "${file("${var.userDataPath}")}"
+  name                      = "QA-App_LC--TF"
+  image_id                  = "${var.amiId}"
+  instance_type             = "t2.micro"
+  iam_instance_profile      = "QA-EC2-Role--Dashboard"
+  key_name                  = "udemy-ec2"
+  ebs_optimized             = "false"
+  enable_monitoring         = "false"
+  security_groups           = ["sg-0b873c7f2a3b27a69"]
+  user_data                 = "${file("${var.userDataPath}")}"
 
 }
 
@@ -152,7 +149,7 @@ resource "aws_autoscaling_group" "QA-Prod-autoscale-grp" {
   }
 }
 
-
+// Create the notification
 resource "aws_autoscaling_notification" "asg_activity_notification" {
   group_names = [
     "${aws_autoscaling_group.QA-Prod-autoscale-grp.name}"
@@ -168,6 +165,7 @@ resource "aws_autoscaling_notification" "asg_activity_notification" {
   topic_arn = "${var.autoscaling_notification_arn}"
 }
 
+// Create the High CPU alarm
 resource "aws_cloudwatch_metric_alarm" "High_Cpu_Alarm" {
   alarm_name = "App_High_Cpu_Alarm--TF"
   comparison_operator = "GreaterThanOrEqualToThreshold"
@@ -178,13 +176,13 @@ resource "aws_cloudwatch_metric_alarm" "High_Cpu_Alarm" {
   statistic = "Average"
   threshold = "80"
   alarm_description = "This metric monitors ec2 cpu utilization"
-  alarm_actions         = ["${aws_autoscaling_policy.app_scaleup_policy.arn}"]
+  alarm_actions          = ["${aws_autoscaling_policy.app_scaleup_policy.arn}"]
   dimensions = {
     AutoScalingGroupName = "${aws_autoscaling_group.QA-Prod-autoscale-grp.name}"
   }
 }
 
-//
+// Create the autoscaling up policy
 resource "aws_autoscaling_policy" "app_scaleup_policy" {
   name                   = "app_scaleup_policy--TF"
   scaling_adjustment     = 1
@@ -193,6 +191,7 @@ resource "aws_autoscaling_policy" "app_scaleup_policy" {
   autoscaling_group_name = "${aws_autoscaling_group.QA-Prod-autoscale-grp.name}"
 }
 
+// Create the Low CPU alarm
 resource "aws_cloudwatch_metric_alarm" "Low_Cpu_Alarm" {
   alarm_name            = "App_Low_Cpu_Alarm--TF"
   comparison_operator   = "LessThanOrEqualToThreshold"
@@ -209,7 +208,7 @@ resource "aws_cloudwatch_metric_alarm" "Low_Cpu_Alarm" {
   }
 }
 
-//
+// Create the autoscaling down policy
 resource "aws_autoscaling_policy" "app_scaledown_policy" {
   name                   = "app_scaledown_policy--TF"
   scaling_adjustment     = -1
